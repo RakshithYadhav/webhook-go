@@ -18,6 +18,15 @@ So if my understanding is correct, we have a production scheduling SaaS, uh, whi
 - But v2 in the future will definitely use kafka.
 
 
+## Issue #1 design — full record
+
+Full decision log (initial proposal → issue found → final call) for every open
+question on issue #1: `docs/adr/0001-accept-and-route-event.md`.
+
+Architecture sketch (v1, with the Redis path marked as v2):
+
+![architecture sketch](docs/adr/assets/0001-architecture-sketch.png)
+
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep
 

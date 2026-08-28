@@ -65,12 +65,26 @@ go-concurrency — duplicating it here is redundant, not additive), a persistent
 datastore, auth/webhook-signing/a multi-tenant dashboard, distributed/horizontal scaling
 (punted to the separate system-design practice track below instead).
 
-**IMPORTANT — planned v2:** v1's event queue is an in-process Go channel, deliberately
-(issue #1 AC: "no external event bus required for v1") — this capstone is about Go's own
-concurrency primitives, not operating a broker. Once `BACKEND-MASTERY.md` Track 8
-(Distributed Systems & Microservices) has taught Kafka/RabbitMQ, **this project is the
-planned target for a v2** that replaces the Go channel with a real message broker — that's
-where queue-in-production practice happens, not here in v1.
+**IMPORTANT — planned v2:** v1 deliberately stays minimal on two fronts:
+- The event queue is an in-process Go channel (issue #1 AC: "no external event bus
+  required for v1") — this capstone is about Go's own concurrency primitives, not
+  operating a broker.
+- The endpoint registry is an in-memory map seeded at startup, not persisted — there's no
+  runtime registration API in v1's scope, so nothing is ever lost on restart that a
+  redeploy wouldn't already re-seed.
+- The registry is single-tenant: a flat `eventType → [endpoints]` map, one customer
+  assumed. This is why "zero endpoints registered for a known event type" is treated as
+  an error in v1 — with one customer, it signals something's actually missing. Multi-
+  tenant scoping (`(customerID, eventType) → [endpoints]`) is deferred to a later
+  version; once added, zero-endpoints-for-one-customer becomes a routine, expected case
+  again, not an error — that logic will need to change with it.
+
+Once `BACKEND-MASTERY.md` Track 8 (Distributed Systems & Microservices, Kafka/RabbitMQ)
+and Track 5 (Databases & the Data Layer, Redis) have been covered, **this project is the
+planned target for a v2** that swaps the Go channel for a real message broker and the
+in-memory registry for a Redis-backed one — pushing this from "simple webhook" toward
+"production-shaped webhook service." That's where the queue and registry-persistence
+practice happens, not here in v1.
 
 ## Separate, optional track
 
