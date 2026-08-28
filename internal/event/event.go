@@ -6,7 +6,7 @@ import (
 )
 
 type Event struct {
-	ResourceId uuid.UUID
+	ResourceID uuid.UUID
 	EventType string
 	Payload json.RawMessage
 }
