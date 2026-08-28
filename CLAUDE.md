@@ -65,6 +65,13 @@ go-concurrency — duplicating it here is redundant, not additive), a persistent
 datastore, auth/webhook-signing/a multi-tenant dashboard, distributed/horizontal scaling
 (punted to the separate system-design practice track below instead).
 
+**IMPORTANT — planned v2:** v1's event queue is an in-process Go channel, deliberately
+(issue #1 AC: "no external event bus required for v1") — this capstone is about Go's own
+concurrency primitives, not operating a broker. Once `BACKEND-MASTERY.md` Track 8
+(Distributed Systems & Microservices) has taught Kafka/RabbitMQ, **this project is the
+planned target for a v2** that replaces the Go channel with a real message broker — that's
+where queue-in-production practice happens, not here in v1.
+
 ## Separate, optional track
 
 `docs/system-design-practice.md` — a zoomed-out system-design exercise on the same
