@@ -27,6 +27,21 @@ Architecture sketch (v1, with the Redis path marked as v2):
 
 ![architecture sketch](docs/adr/assets/0001-architecture-sketch.png)
 
+### Go entry point — `main` and how it relates to the binary
+So for all of the go projects, do we have main as the main entry point? And what do you mean by the main entry point? Like, uh, what... how does it relate to the binary? Can you explain that, you know, the intuition behind this, please?
+
+- Yes — every runnable Go program needs exactly one `func main()`, and it's tied directly to how the compiler produces a binary.
+
+**The mechanism:**
+- `package main` is a special, reserved package name. It tells the Go compiler "this directory produces an executable," not a library.
+- Inside a `package main`, Go requires exactly one function called `main()` with no parameters, no return value. That's not a convention you could rename — the compiler specifically looks for it.
+- When you run `go build`, the compiler finds that `package main` + `func main()` pair and produces a single standalone binary file (e.g. `webhook-go.exe`). Everything the program needs — your code, every package you imported, the Go runtime itself — gets statically compiled into that one file. No separate runtime needs to be installed on the machine that runs it (unlike Python needing a Python interpreter present).
+- When you actually run that binary, the OS loads it and Go's runtime does its own startup (sets up the goroutine scheduler, memory allocator, etc.), then calls your `main()` function. Your code starts executing at the first line inside `main()`. When `main()` returns, the process exits.
+
+**Not every Go project has one.** Only things meant to be *run* need `package main`. A library — code meant to be *imported* by other Go programs, like a JSON-parsing package — is just `package registry` or `package event` with exported functions; nobody calls `go run` on it directly, other code imports it and calls its functions. `go build` on a non-main package just compiles and caches it, it doesn't produce a runnable file.
+
+**For this project:** since `webhook-go` is a runnable service (not a library), it needs exactly one `main()` — that's `cmd/main.go`. Everything else (`internal/registry`, `internal/event`, etc.) will be ordinary packages with no `main()` — `cmd/main.go`'s job is to import all of them, wire them together (build the registry, start the worker pool goroutines, start listening for shutdown), and that's it. It's the one place in the whole codebase where the program actually "starts."
+
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep
 
