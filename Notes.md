@@ -63,6 +63,24 @@ If `New` instead takes `*registry.Registry`, `svc` doesn't hold a copy — it ho
 
 That's why: value = independent copy, frozen at copy time. Pointer = shared reference to one real instance, always current.
 
+## Next steps (paused here — resume from this list)
+
+State as of pause: `Event`, `Registry`, `DeliveryItem`, `IntakeService` (`New` + `Submit`)
+all written and building/vetting clean. `cmd/main.go` wires them together with hardcoded
+test data but doesn't yet prove anything actually happened.
+
+1. Write `internal/intake/service_test.go` — same package (`package intake`, not
+   `intake_test`), so it can reach the unexported `queue` field directly. Cover: happy
+   path (fan-out produces the right number of items, `len(i.queue)` matches endpoint
+   count) and the zero-endpoint case (`ErrNoEndPoints` returned, nothing pushed).
+2. Once the test proves `Submit` works, decide what (if anything) `main.go` should still
+   do with the hardcoded test data — likely nothing meaningful until the worker pool
+   (issue #2) exists to actually drain the queue.
+3. Small leftover cleanup, non-blocking: `event event.Event` param in `Submit` still
+   shadows the `event` package; `ErrNoEndPoints` → idiomatic casing is `ErrNoEndpoints`.
+4. Once 1-3 are done, issue #1 is fully closed (code + test) — commit, then start issue
+   #2 (bounded worker pool) the same way #1 started: §1-2 pass, then the design round.
+
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep
 
