@@ -42,6 +42,27 @@ So for all of the go projects, do we have main as the main entry point? And what
 
 **For this project:** since `webhook-go` is a runnable service (not a library), it needs exactly one `main()` — that's `cmd/main.go`. Everything else (`internal/registry`, `internal/event`, etc.) will be ordinary packages with no `main()` — `cmd/main.go`'s job is to import all of them, wire them together (build the registry, start the worker pool goroutines, start listening for shutdown), and that's it. It's the one place in the whole codebase where the program actually "starts."
 
+### Why pointer receivers / pointer fields, not values
+I dont know why we have to use pointer can you clear that point
+
+Two related but separate things — a walkthrough with a concrete timeline.
+
+**Why `Seed`/`Lookup` need pointer receivers on `Registry`:** a method with a *value* receiver operates on a **copy** of the struct — any change made inside the method disappears the moment it returns, because the original variable outside was never touched. If `Seed` were `func (r Registry) Seed(...)`, then `r.endpoints = endpoints` would set the field on a temporary copy that gets thrown away — the real `Registry` the caller holds would never actually get seeded. A pointer receiver (`func (r *Registry) Seed(...)`) means the method reaches the *original* struct via its memory address, so the mutation sticks.
+
+**Why `IntakeService` needs to hold a `*Registry`, not a `Registry` value — this is the separate question.** Think of a `Registry` value as a photocopy of a document, and a `*Registry` as the actual address of the one real document. Concrete timeline:
+
+```
+r := registry.Registry{}          // one real Registry exists, empty
+svc := intake.New(r)              // if New takes a VALUE — svc now holds its own
+                                   // independent COPY of r, taken at this exact moment
+r.Seed(map[...]{...})             // mutates the ORIGINAL r — svc's copy never sees this
+svc.Submit(event)                 // looks up svc's copy — still empty, wrong result
+```
+
+If `New` instead takes `*registry.Registry`, `svc` doesn't hold a copy — it holds the *address* of the same real `Registry` that `r` refers to. There's only ever one `Registry` in memory; `r` and `svc.register` are just two different ways of pointing at it. So no matter what order `Seed()` and `New()` happen in, `svc` always sees the current, real state — because it's not looking at a snapshot, it's looking at the live thing.
+
+That's why: value = independent copy, frozen at copy time. Pointer = shared reference to one real instance, always current.
+
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep
 

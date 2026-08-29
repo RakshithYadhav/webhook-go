@@ -4,6 +4,20 @@ One line per critical mistake per coding step — syntax or logic errors caught 
 guided build, not design-round feedback (that's `FEEDBACK.md`). Newest entries at top
 of each day's section.
 
+## 2026-08-28 (session 2)
+
+- `internal/intake/service.go`: `Submit` returned `ErrNoEndPoints` before its signature declared an `error` return type at all — the two changes needed to happen together, not just the return statement.
+- `internal/intake/service.go`: declared a sentinel error with `const ErrNoEndPoints = errors.New(...)` — `errors.New(...)` runs at runtime, so it can't be a `const` (which requires a compile-time constant); needs `var`.
+- `internal/intake/service.go`: `register` field was `registry.Registry` (by value) instead of `*registry.Registry` (pointer) — every method on `Registry` uses a pointer receiver; storing by value risks `IntakeService` holding a stale copy if `Seed()` reassigns the map after the struct was copied.
+- `internal/intake/service.go`: missing trailing comma after `queue: make(...)` in the composite literal — didn't compile.
+- `internal/intake/service.go`: channel capacity was a bare `100` inline instead of a named constant — no compile issue, but undocumented and hard to find/tune later.
+- `internal/intake/service.go`: `make(chan deliveryitem.DeliveryItem)` created with no capacity argument at all — an unbuffered channel (capacity 0), not the bounded-with-room-to-absorb-a-burst channel the ADR calls for.
+- `internal/intake/service.go`: constructor written as a method on `*IntakeService` (`func (i *IntakeService) Constructor()`) instead of a plain function — backwards, since building the instance requires an instance to already exist; the receiver `i` was also never used in the body.
+- `internal/deliveryItem/deliveryItem.go`: field type written as bare `Event`/`event` instead of package-qualified `event.Event` — confused the type name with the package name twice in a row (same root cause as the import-path miss).
+- `internal/deliveryItem/deliveryItem.go`: import path written as `"internal/event"` instead of the full module path `"github.com/RakshithYadhav/webhook-go/internal/event"` — Go doesn't resolve local packages by their relative folder path.
+- `internal/deliveryItem/deliveryService.go`: created as a completely empty file (no `package` declaration) — broke the build for the whole module, not just this package, since every `.go` file needs at least a package clause.
+- `internal/deliveryItem/deliveryItem.go`: field was `Endpoints []string` (plural) — reopened the ADR's fan-out decision; a `DeliveryItem` must hold exactly one endpoint, since intake already splits one event into one item per endpoint.
+
 ## 2026-08-28
 
 - `internal/registry/registry.go`: lowercased the wrong identifier when closing the exported-field race hole — unexported the `Seed` method instead of the `Endpoints` field, which would've blocked `main.go` from seeding it at all while leaving the field still directly writable from outside the package.
