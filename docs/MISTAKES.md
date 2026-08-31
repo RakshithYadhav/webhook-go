@@ -4,6 +4,10 @@ One line per critical mistake per coding step — syntax or logic errors caught 
 guided build, not design-round feedback (that's `FEEDBACK.md`). Newest entries at top
 of each day's section.
 
+## 2026-08-29
+
+- `internal/intake/service_test.go`: zero-endpoint test's assertion was inverted — `if err == ErrNoEndPoints { t.Fatalf(...) }` fails the test exactly when the code behaves correctly, and would silently pass if `Submit` had a real bug (e.g. returned `nil` instead of the expected error). Should assert on the negative (`err != ErrNoEndPoints`).
+
 ## 2026-08-28 (session 2)
 
 - `internal/intake/service.go`: `Submit` returned `ErrNoEndPoints` before its signature declared an `error` return type at all — the two changes needed to happen together, not just the return statement.
