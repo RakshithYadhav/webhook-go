@@ -27,7 +27,7 @@ type Pool struct {
 
 func NewPool(eventQueue <-chan deliveryitem.DeliveryItem, poolSize int, workerClient WorkerClient) *Pool {
 	return &Pool{
-		poolSize:  poolSize,
+		poolSize:   poolSize,
 		eventQueue: eventQueue,
 		client:     workerClient,
 	}
@@ -62,5 +62,10 @@ func New() *WorkerClient {
 }
 
 func (w *WorkerClient) SendDeliveryItem(item deliveryitem.DeliveryItem) {
-	w.client.Post(item.Endpoint, "application/json", bytes.NewReader(item.Event.Payload))
+	res, err := w.client.Post(item.Endpoint, "application/json", bytes.NewReader(item.Event.Payload))
+	if err != nil {
+		return
+	}
+
+	defer res.Body.Close()
 }
