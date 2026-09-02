@@ -41,3 +41,10 @@ func (i *IntakeService) Submit(event event.Event) error {
 
 	return nil
 }
+
+// Returns <-chan, not chan: queue itself stays private so only Submit can send.
+// The receive-only return type is what actually restricts callers to reading —
+// Submit still holds full send access via the private field underneath.
+func (i *IntakeService) Queue() <-chan (deliveryitem.DeliveryItem) {
+	return i.queue
+}
