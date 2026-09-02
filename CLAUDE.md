@@ -36,6 +36,14 @@ system that served real customers. See the honesty boundary in `docs/RESUME.md`.
    - He can ask Claude to just write one specific piece directly (a one-off jump to
      Rung-1-style for that piece only) and then resume guided build right after — follow
      that switch instantly, don't hold out for "the right rung."
+   - Guided build has three hint levels, switched on plain request with no fixed
+     trigger phrase: goal-only steps (default), a deeper plain-language walkthrough of
+     the mechanism on request ("go deeper"), or Claude writing that one specific piece
+     on request — then drop straight back to goal-only for whatever's next.
+   - **TDD (red-green), adopted 2026-08-29, applies to new logic going forward:** write
+     the failing test first (red) — it should fail because the behavior doesn't exist
+     yet — then write the minimal code to make it pass (green), then clean up. Doesn't
+     apply retroactively to already-working code or to pure renames/cleanup.
 3. **No Claude attribution in any commit, full stop.** This is a resume-facing personal
    project. No `Co-Authored-By: Claude` trailer or any other Claude/Anthropic mention, in
    any commit message, including ones for docs Claude drafted.

@@ -65,21 +65,23 @@ That's why: value = independent copy, frozen at copy time. Pointer = shared refe
 
 ## Next steps (paused here — resume from this list)
 
-State as of pause: `Event`, `Registry`, `DeliveryItem`, `IntakeService` (`New` + `Submit`)
-all written and building/vetting clean. `cmd/main.go` wires them together with hardcoded
-test data but doesn't yet prove anything actually happened.
+State as of pause (2026-08-29): issue #1 is functionally done — `Event`, `Registry`,
+`DeliveryItem`, `IntakeService` (`New` + `Submit`) all written, and
+`internal/intake/service_test.go` has two passing tests (happy-path fan-out count,
+zero-endpoint error). Whole project builds, vets, and tests clean. Not yet committed.
+Two small cleanup items still open (non-blocking): `event event.Event` param in
+`Submit` shadows the `event` package; `ErrNoEndPoints` → idiomatic casing is
+`ErrNoEndpoints`. `main.go`'s hardcoded test-data wiring is superseded by the real
+tests — decide whether to trim it down.
 
-1. Write `internal/intake/service_test.go` — same package (`package intake`, not
-   `intake_test`), so it can reach the unexported `queue` field directly. Cover: happy
-   path (fan-out produces the right number of items, `len(i.queue)` matches endpoint
-   count) and the zero-endpoint case (`ErrNoEndPoints` returned, nothing pushed).
-2. Once the test proves `Submit` works, decide what (if anything) `main.go` should still
-   do with the hardcoded test data — likely nothing meaningful until the worker pool
-   (issue #2) exists to actually drain the queue.
-3. Small leftover cleanup, non-blocking: `event event.Event` param in `Submit` still
-   shadows the `event` package; `ErrNoEndPoints` → idiomatic casing is `ErrNoEndpoints`.
-4. Once 1-3 are done, issue #1 is fully closed (code + test) — commit, then start issue
-   #2 (bounded worker pool) the same way #1 started: §1-2 pass, then the design round.
+**Working method update:** TDD (red-green) adopted going forward for new logic —
+write the failing test first, then the minimal code to pass it. Recorded in
+`CLAUDE.md`. Doesn't apply retroactively to #1's already-working code.
+
+**Issue #2 design closed** — full record in `docs/adr/0002-bounded-worker-pool.md`.
+Pool size via constructor param, 2s HTTP timeout (named constant), per-item panic
+recovery, no failure-logging hook (that's #5's job), shutdown explicitly deferred to
+#4. Now in TDD implementation (red-green) for issue #2.
 
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep

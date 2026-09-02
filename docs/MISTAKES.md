@@ -4,6 +4,14 @@ One line per critical mistake per coding step — syntax or logic errors caught 
 guided build, not design-round feedback (that's `FEEDBACK.md`). Newest entries at top
 of each day's section.
 
+## 2026-08-29 (session 2 — issue #2, worker pool, TDD)
+
+- `internal/worker/worker_test.go`: `TestTimeOut` wasn't updated when `SendDeliveryItem` became a method on `Worker` — kept calling the old free function, which no longer existed in that form.
+- `internal/worker/worker_test.go`: `worker = New()` used `=` instead of `:=` for a not-yet-declared variable; adjacent line had a typo (`woSendDeliveryItem` instead of `worker.SendDeliveryItem`).
+- `internal/worker/worker.go`: constructor written as `func (w *Worker) New() *Worker` — same backwards pattern as `IntakeService.Constructor` earlier (building the thing requires an instance of the thing to already exist); a repeat of a previously-caught mistake, not a new one.
+- `internal/worker/worker.go`: struct comment repeated an earlier incorrect claim (that holding a `Client` on the struct was "for connection pooling") after that claim had already been corrected in conversation — worth double-checking comments against corrections made afterward, not just the code.
+- `internal/worker/worker.go`: captured both return values of `http.Post` with `res, err :=` but used neither — Go requires every declared local variable to be used; since the minimal version didn't need them yet, the call should've been a bare statement instead.
+
 ## 2026-08-29
 
 - `internal/intake/service_test.go`: zero-endpoint test's assertion was inverted — `if err == ErrNoEndPoints { t.Fatalf(...) }` fails the test exactly when the code behaves correctly, and would silently pass if `Submit` had a real bug (e.g. returned `nil` instead of the expected error). Should assert on the negative (`err != ErrNoEndPoints`).
