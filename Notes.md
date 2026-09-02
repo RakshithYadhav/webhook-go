@@ -83,39 +83,19 @@ Pool size via constructor param, 2s HTTP timeout (named constant), per-item pani
 recovery, no failure-logging hook (that's #5's job), shutdown explicitly deferred to
 #4. Now in TDD implementation (red-green) for issue #2.
 
-**Paused here (2026-08-29, later in the day).** `internal/worker` now has:
-`WorkerClient` (renamed from `Worker` — client with 2s timeout, `SendDeliveryItem`,
-two passing tests). `IntakeService.Queue()` done (receive-only accessor). A `Pool`
-type has been **scaffolded but is not yet proven to work**: `NewPool` (constructor,
-takes queue/size/client), `Start()` (spins up N goroutines, each `for range`-looping
-over the queue and calling `SendDeliveryItem`). `TestWorkerPool` still uses the old
-hand-rolled inline goroutine version from before the extraction — it was never
-rewritten to call `NewPool`/`Start()`, so **the new `Pool` type currently has zero
-test coverage**, even though it compiles. Whole project still builds/vets/tests clean
-(the old inline test still passes on its own).
+**Issue #2 is done (2026-08-29).** Everything in the ADR built and verified:
+`WorkerClient` (2s timeout, `SendDeliveryItem`, response body closed on success),
+`Pool` (`NewPool`/`Start()`, N goroutines consuming `IntakeService.Queue()`), per-item
+panic recovery (scoped correctly — see mistakes log, this one was genuinely subtle),
+and `main.go` wired end to end (`select{}` looked right but deadlocks in a one-shot
+program with no ongoing work — used a bounded `time.Sleep` instead, which is fine here
+specifically since nothing concurrent is actually being synchronized with). Full test
+suite passes, ran the actual binary to confirm it doesn't crash. `Pool.wg` was
+introduced then removed — turned out to be premature infra for issue #4, not needed by
+#2's own scope. All committed.
 
-**Immediate resume point:** `Pool.wg` (a `sync.WaitGroup` field) has `wg.Add(1)`
-inside the consume loop with **no matching `wg.Done()` anywhere** — if ever waited on,
-it would block forever. Also undecided: is this `WaitGroup` meant to track (a)
-"items currently in flight" (`Add` before each `SendDeliveryItem` call, `Done` right
-after) or (b) "worker goroutines still alive" (`Add` once per spawned goroutine in
-`Start()`, `Done` once when that goroutine's loop fully exits — this second shape is
-what issue #4's graceful shutdown will eventually want, to know when the pool has
-fully drained). Decide the semantics, place `Add`/`Done` accordingly.
-
-**Still remaining for issue #2, in order:**
-1. Resolve the `Pool.wg` placement/semantics above.
-2. Rewrite `TestWorkerPool` to actually construct a `Pool` via `NewPool` and call
-   `Start()`, replacing the inline hand-rolled goroutines — needed before the
-   extraction can be trusted as correct.
-3. Panic recovery per item (Decision 3) — not implemented.
-4. Response body handling — `SendDeliveryItem` discards both `client.Post` return
-   values; a successful response's body never gets closed (connection leak). Not in
-   the ADR explicitly, but a real gap flagged during review.
-5. `main.go` wiring — hook the pool up so it actually runs.
-
-Not yet committed since the last commit (`Added notes session 1.`) — worth committing
-once the `Pool` extraction is actually verified by a real test, not before.
+**Next: issue #3 (per-resource ordering, keyed mutex)** — start the same way #1 and #2
+did: §1-2 pass, then the design round, write `docs/adr/0003-...md`, then TDD it.
 
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep
