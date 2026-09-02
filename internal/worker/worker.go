@@ -37,7 +37,16 @@ func (p *Pool) Start() {
 	for worker := 0; worker < p.poolSize; worker += 1 {
 		go func() {
 			for item := range p.eventQueue {
-				p.client.SendDeliveryItem(item)
+				// Recovery is scoped per item via this inner function call: defer
+				// only runs when its *enclosing function* returns, so recovering
+				// at the loop level would exit the whole goroutine on the first
+				// panic, not just skip the one bad item.
+				func() {
+					defer func() {
+						recover()
+					}()
+					p.client.SendDeliveryItem(item)
+				}()
 			}
 		}()
 	}
