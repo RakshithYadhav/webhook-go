@@ -83,31 +83,39 @@ Pool size via constructor param, 2s HTTP timeout (named constant), per-item pani
 recovery, no failure-logging hook (that's #5's job), shutdown explicitly deferred to
 #4. Now in TDD implementation (red-green) for issue #2.
 
-**Paused here (2026-08-29).** Done so far for issue #2: `internal/worker` package —
-`Worker` struct holding an `http.Client` (timeout set, named constant), `New()`
-constructor, `SendDeliveryItem` method (one POST per item), two passing tests
-(delivers to endpoint; respects the 2s timeout under a slow server). Also added
-`IntakeService.Queue()` on the intake side — returns `<-chan DeliveryItem`
-(receive-only), so the pool can consume without being able to send/close/reassign the
-channel; `Submit` keeps sole write access via the still-private `queue` field. Whole
-project builds/vets/tests clean. **Not yet committed** — a commit message was drafted
-("Added worker package: HTTP delivery with a bounded timeout, TDD'd") but not run yet,
-and the intake `Queue()` addition happened after that, so the message would need
-updating to cover it too.
+**Paused here (2026-08-29, later in the day).** `internal/worker` now has:
+`WorkerClient` (renamed from `Worker` — client with 2s timeout, `SendDeliveryItem`,
+two passing tests). `IntakeService.Queue()` done (receive-only accessor). A `Pool`
+type has been **scaffolded but is not yet proven to work**: `NewPool` (constructor,
+takes queue/size/client), `Start()` (spins up N goroutines, each `for range`-looping
+over the queue and calling `SendDeliveryItem`). `TestWorkerPool` still uses the old
+hand-rolled inline goroutine version from before the extraction — it was never
+rewritten to call `NewPool`/`Start()`, so **the new `Pool` type currently has zero
+test coverage**, even though it compiles. Whole project still builds/vets/tests clean
+(the old inline test still passes on its own).
+
+**Immediate resume point:** `Pool.wg` (a `sync.WaitGroup` field) has `wg.Add(1)`
+inside the consume loop with **no matching `wg.Done()` anywhere** — if ever waited on,
+it would block forever. Also undecided: is this `WaitGroup` meant to track (a)
+"items currently in flight" (`Add` before each `SendDeliveryItem` call, `Done` right
+after) or (b) "worker goroutines still alive" (`Add` once per spawned goroutine in
+`Start()`, `Done` once when that goroutine's loop fully exits — this second shape is
+what issue #4's graceful shutdown will eventually want, to know when the pool has
+fully drained). Decide the semantics, place `Add`/`Done` accordingly.
 
 **Still remaining for issue #2, in order:**
-1. **The pool itself** — the actual worker pool (N goroutines, size via constructor
-   param per Decision 1, each pulling from `IntakeService.Queue()` and calling
-   `SendDeliveryItem`). This is the biggest remaining piece — nothing consumes the
-   queue yet. Next TDD test: push several items onto a channel, start a pool with a
-   few workers, verify all items get delivered — first real concurrency test, needs
-   `sync.WaitGroup` (or equivalent) to know when all async delivery is done before
-   asserting, since a fixed sleep would be flaky.
-2. Panic recovery per item (Decision 3) — not implemented.
-3. Response body handling — `SendDeliveryItem` discards both `client.Post` return
+1. Resolve the `Pool.wg` placement/semantics above.
+2. Rewrite `TestWorkerPool` to actually construct a `Pool` via `NewPool` and call
+   `Start()`, replacing the inline hand-rolled goroutines — needed before the
+   extraction can be trusted as correct.
+3. Panic recovery per item (Decision 3) — not implemented.
+4. Response body handling — `SendDeliveryItem` discards both `client.Post` return
    values; a successful response's body never gets closed (connection leak). Not in
    the ADR explicitly, but a real gap flagged during review.
-4. `main.go` wiring — hook the pool up so it actually runs.
+5. `main.go` wiring — hook the pool up so it actually runs.
+
+Not yet committed since the last commit (`Added notes session 1.`) — worth committing
+once the `Pool` extraction is actually verified by a real test, not before.
 
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep

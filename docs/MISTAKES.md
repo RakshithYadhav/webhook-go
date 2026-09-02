@@ -4,6 +4,11 @@ One line per critical mistake per coding step — syntax or logic errors caught 
 guided build, not design-round feedback (that's `FEEDBACK.md`). Newest entries at top
 of each day's section.
 
+## 2026-08-29 (session 3 — issue #2, worker pool test, TDD)
+
+- `internal/worker/worker_test.go`: `TestWorkerPool`'s `wg.Wait()` was wrapped in its own `go func() { ... }()`, so the test function returned immediately without ever waiting for it — the test "passed" in 0.00s without actually verifying anything happened.
+- `internal/worker/worker_test.go`: each worker goroutine did a single `item := <-queue` receive instead of looping — only 3 of 15 submitted items ever got consumed, the other 12 sat in the channel untouched, but the bug above masked this since nothing was actually being waited on.
+
 ## 2026-08-29 (session 2 — issue #2, worker pool, TDD)
 
 - `internal/worker/worker_test.go`: `TestTimeOut` wasn't updated when `SendDeliveryItem` became a method on `Worker` — kept calling the old free function, which no longer existed in that form.

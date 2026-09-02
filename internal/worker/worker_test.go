@@ -1,13 +1,18 @@
 package worker
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
 	deliveryitem "github.com/RakshithYadhav/webhook-go/internal/deliveryItem"
 	"github.com/RakshithYadhav/webhook-go/internal/event"
+	"github.com/RakshithYadhav/webhook-go/internal/intake"
+	"github.com/RakshithYadhav/webhook-go/internal/registry"
+	"github.com/google/uuid"
 )
 
 func TestPostBehaviourOfWorker(t *testing.T) {
@@ -65,4 +70,59 @@ func TestTimeOut(t *testing.T) {
 	if duration > 2500*time.Millisecond {
 		t.Fatalf("Too slow its slower than 2 seconds")
 	}
+}
+
+func TestWorkerPool(t *testing.T) {
+	// set up.
+	// registry -  need to seed and create few endpoints.
+	// for test. 3 events with a single endpoint.
+	var wg sync.WaitGroup
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		defer wg.Done()
+	}
+
+	server := newServer(handler)
+
+	endpoints := map[string][]string{
+		"insert":    {server.URL},
+		"update":    {server.URL},
+		"processed": {server.URL},
+	}
+
+	reg := registry.Registry{}
+	reg.Seed(endpoints)
+
+	// Next Intake
+	service := intake.New(&reg)
+	// Add test events to the queue.
+	for index := 0; index < 5; index++ {
+
+		for k, _ := range endpoints {
+			sampleEvent := event.Event{
+				ResourceID: uuid.New(),
+				EventType:  k,
+				Payload:    []byte(fmt.Sprintf("index : %d", index)),
+			}
+
+			wg.Add(1)
+			service.Submit(sampleEvent)
+		}
+	}
+
+	queue := service.Queue()
+	w := New()
+
+	for worker := 0; worker < 3; worker++ {
+		go func() {
+			for item := range queue {
+				w.SendDeliveryItem(item)
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func newServer(handler func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(handler))
 }
