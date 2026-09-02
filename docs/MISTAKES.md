@@ -4,6 +4,10 @@ One line per critical mistake per coding step — syntax or logic errors caught 
 guided build, not design-round feedback (that's `FEEDBACK.md`). Newest entries at top
 of each day's section.
 
+## 2026-08-29 (session 4 — issue #2, main.go wiring)
+
+- `cmd/main.go`: recommended `select {}` to keep `main()` alive after `pool.Start()` — confirmed by actually running the binary that this crashes with "fatal error: all goroutines are asleep - deadlock!" once the one-shot test batch finishes, because at that point every goroutine (main included) is permanently parked with no future wakeup source, and Go's runtime correctly detects and kills that. `select{}` is only safe in a real server's `main()` because something like a listening socket gives the runtime a legitimate reason to believe progress is still possible — not applicable to this one-shot throwaway wiring. Replaced with a bounded `time.Sleep`, which is fine here specifically because there's no ongoing concurrent work being synchronized with, just one known batch given time to finish.
+
 ## 2026-08-29 (session 3 — issue #2, worker pool test, TDD)
 
 - `internal/worker/worker.go`: `defer recover()` (bare, unwrapped) inside the consume loop — two stacked bugs, both confirmed by direct experiment. (1) A bare `defer recover()` doesn't actually recover anything — `recover()` only has an effect when called directly inside the body of a deferred function literal (`defer func() { recover() }()`); deferring the call to `recover` itself doesn't count, and the process still crashed. (2) Even once wrapped correctly, placing the `defer` at the loop level meant recovering a panic exited the *entire enclosing function* (the worker goroutine itself), not just that one item — the loop never reached later items, silently and permanently shrinking the pool by one worker per panic. Fixed by wrapping each item's work in its own immediately-invoked inner function, with the `defer`/`recover` inside that — so a panic only unwinds up to the inner function's boundary, and the outer loop continues.
