@@ -3,7 +3,6 @@ package worker
 import (
 	"bytes"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/RakshithYadhav/webhook-go/internal/deliveryItem"
@@ -21,25 +20,23 @@ type WorkerClient struct {
 }
 
 type Pool struct {
-	eventQueue chan (deliveryitem.DeliveryItem)
-	queueSize  int
+	eventQueue <-chan deliveryitem.DeliveryItem
+	poolSize   int
 	client     WorkerClient
-	wg sync.WaitGroup
 }
 
-func NewPool(eventQueue chan (deliveryitem.DeliveryItem), queueSize int, workerClient WorkerClient) *Pool {
+func NewPool(eventQueue <-chan deliveryitem.DeliveryItem, poolSize int, workerClient WorkerClient) *Pool {
 	return &Pool{
-		queueSize:  queueSize,
+		poolSize:  poolSize,
 		eventQueue: eventQueue,
 		client:     workerClient,
 	}
 }
 
 func (p *Pool) Start() {
-	for worker := 0; worker < p.queueSize; worker += 1 {
+	for worker := 0; worker < p.poolSize; worker += 1 {
 		go func() {
 			for item := range p.eventQueue {
-				p.wg.Add(1)
 				p.client.SendDeliveryItem(item)
 			}
 		}()

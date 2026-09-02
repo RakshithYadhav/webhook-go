@@ -109,16 +109,9 @@ func TestWorkerPool(t *testing.T) {
 		}
 	}
 
-	queue := service.Queue()
-	w := New()
-
-	for worker := 0; worker < 3; worker++ {
-		go func() {
-			for item := range queue {
-				w.SendDeliveryItem(item)
-			}
-		}()
-	}
+	client := New()
+	pool := NewPool(service.Queue(), 3, *client)
+	pool.Start()
 
 	wg.Wait()
 }

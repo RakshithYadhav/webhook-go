@@ -6,6 +6,8 @@ of each day's section.
 
 ## 2026-08-29 (session 3 — issue #2, worker pool test, TDD)
 
+- `internal/worker/worker.go`: `Pool.wg` had `Add(1)` with no matching `Done()` — would deadlock any future `Wait()` call. Resolved by realizing the field wasn't actually needed for issue #2's scope at all (the concurrency cap comes from having exactly N goroutines, not from counting) — it was premature infrastructure for issue #4's shutdown, not something #2 required; removed rather than fixed.
+- `internal/worker/worker.go`: `Pool.eventQueue`/`NewPool`'s parameter were a bidirectional `chan DeliveryItem`, but `IntakeService.Queue()` returns a receive-only `<-chan DeliveryItem` — Go won't implicitly widen a receive-only channel back to bidirectional, so the two didn't type-match once actually wired together.
 - `internal/worker/worker_test.go`: `TestWorkerPool`'s `wg.Wait()` was wrapped in its own `go func() { ... }()`, so the test function returned immediately without ever waiting for it — the test "passed" in 0.00s without actually verifying anything happened.
 - `internal/worker/worker_test.go`: each worker goroutine did a single `item := <-queue` receive instead of looping — only 3 of 15 submitted items ever got consumed, the other 12 sat in the channel untouched, but the bug above masked this since nothing was actually being waited on.
 
