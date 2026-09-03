@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/RakshithYadhav/webhook-go/internal/deliveryItem"
+	"github.com/RakshithYadhav/webhook-go/internal/resourceLock"
 )
 
 const timeOut = 2 * time.Second
@@ -20,16 +21,18 @@ type WorkerClient struct {
 }
 
 type Pool struct {
-	eventQueue <-chan deliveryitem.DeliveryItem
-	poolSize   int
-	client     WorkerClient
+	eventQueue   <-chan deliveryitem.DeliveryItem
+	poolSize     int
+	client       WorkerClient
+	resourceLock *resourcelock.ResourceLock
 }
 
 func NewPool(eventQueue <-chan deliveryitem.DeliveryItem, poolSize int, workerClient WorkerClient) *Pool {
 	return &Pool{
-		poolSize:   poolSize,
-		eventQueue: eventQueue,
-		client:     workerClient,
+		poolSize:     poolSize,
+		eventQueue:   eventQueue,
+		client:       workerClient,
+		resourceLock: resourcelock.NewResourceLock(),
 	}
 }
 
@@ -42,12 +45,16 @@ func (p *Pool) Start() {
 				// at the loop level would exit the whole goroutine on the first
 				// panic, not just skip the one bad item.
 				func() {
+					p.resourceLock.Lock(item.Event.ResourceID)
+					defer p.resourceLock.Unlock(item.Event.ResourceID)
+					
 					defer func() {
 						recover()
 					}()
 					p.client.SendDeliveryItem(item)
 				}()
 			}
+
 		}()
 	}
 }
