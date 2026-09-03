@@ -94,8 +94,21 @@ suite passes, ran the actual binary to confirm it doesn't crash. `Pool.wg` was
 introduced then removed — turned out to be premature infra for issue #4, not needed by
 #2's own scope. All committed.
 
-**Next: issue #3 (per-resource ordering, keyed mutex)** — start the same way #1 and #2
-did: §1-2 pass, then the design round, write `docs/adr/0003-...md`, then TDD it.
+**Issue #3 is done (2026-09-03).** Design settled on a keyed mutex over a rejected
+channel-per-resource approach (would've broken #2's fixed-pool-size guarantee). Built
+`internal/resourceLock` (map of per-resource `sync.Mutex`, guarded by a separate
+short-lived mutex for the get-or-create step only), wired into `worker.go`'s per-item
+inner function with the lock held only across the delivery call, released via `defer`
+so it survives a panic. Skipped TDD for this unit on purpose (explicit call, tests
+written after the code instead of before). Two tests confirm both AC halves: same
+resource never overlaps (`TestResourceLockOnWorkerPool`), different resources still run
+concurrently (`TestDifferentResourcesDeliverConcurrently` — caught a real bug first
+where the test handler's sleep exactly matched the HTTP client's timeout, causing a
+false-positive overlap). Full record: `docs/adr/0003-per-resource-delivery-ordering.md`.
+`docs/RESUME.md` harvested for #2 and #3 (both were done but hadn't been recorded).
+
+**Next: issue #4 (graceful shutdown, in-flight drain)** — start the same way: §1-2 pass,
+then the design round, write `docs/adr/0004-...md`, then implementation.
 
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep
