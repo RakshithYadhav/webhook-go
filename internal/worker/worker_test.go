@@ -116,6 +116,73 @@ func TestWorkerPool(t *testing.T) {
 	wg.Wait()
 }
 
+func TestResourceLockOnWorkerPool(t *testing.T) {
+	// set up.
+	// registry -  need to seed and create few endpoints.
+	// for test. 3 events with a single endpoint.
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	inFlight := false
+	overLap := false
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		if inFlight {
+			overLap = true
+		} else {
+			inFlight = true
+		}
+		mu.Unlock()
+
+		time.Sleep(time.Millisecond * 200)
+
+		mu.Lock()
+		inFlight = false
+		mu.Unlock()
+
+		defer wg.Done()
+	}
+
+	server := newServer(handler)
+
+	endpoints := map[string][]string{
+		"insert":    {server.URL},
+		"update":    {server.URL},
+		"processed": {server.URL},
+	}
+
+	reg := registry.Registry{}
+	reg.Seed(endpoints)
+
+	// Next Intake
+	service := intake.New(&reg)
+	// Add test events to the queue.
+	resId := uuid.New()
+	for index := 0; index < 5; index++ {
+
+		for k, _ := range endpoints {
+			sampleEvent := event.Event{
+				ResourceID: resId,
+				EventType:  k,
+				Payload:    []byte(fmt.Sprintf("index : %d", index)),
+			}
+
+			wg.Add(1)
+			service.Submit(sampleEvent)
+		}
+	}
+
+	client := New()
+	pool := NewPool(service.Queue(), 3, *client)
+	pool.Start()
+	wg.Wait()
+
+	if overLap {
+		t.Fatalf("Over lap detected test failed.")
+	}
+}
+
 func newServer(handler func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(handler))
 }
