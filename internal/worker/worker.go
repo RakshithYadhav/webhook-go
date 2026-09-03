@@ -2,11 +2,13 @@ package worker
 
 import (
 	"bytes"
-	"net/http"
-	"time"
-
+	"context"
 	"github.com/RakshithYadhav/webhook-go/internal/deliveryItem"
 	"github.com/RakshithYadhav/webhook-go/internal/resourceLock"
+	"net/http"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const timeOut = 2 * time.Second
@@ -21,18 +23,21 @@ type WorkerClient struct {
 }
 
 type Pool struct {
-	eventQueue   <-chan deliveryitem.DeliveryItem
-	poolSize     int
-	client       WorkerClient
-	resourceLock *resourcelock.ResourceLock
+	eventQueue       <-chan deliveryitem.DeliveryItem
+	poolSize         int
+	client           WorkerClient
+	resourceLock     *resourcelock.ResourceLock
+	shutDownIntiated atomic.Bool
+	wg               *sync.WaitGroup
 }
 
-func NewPool(eventQueue <-chan deliveryitem.DeliveryItem, poolSize int, workerClient WorkerClient) *Pool {
+func NewPool(eventQueue <-chan deliveryitem.DeliveryItem, poolSize int, workerClient WorkerClient, wg *sync.WaitGroup) *Pool {
 	return &Pool{
 		poolSize:     poolSize,
 		eventQueue:   eventQueue,
 		client:       workerClient,
 		resourceLock: resourcelock.NewResourceLock(),
+		wg:           wg,
 	}
 }
 
@@ -47,16 +52,34 @@ func (p *Pool) Start() {
 				func() {
 					p.resourceLock.Lock(item.Event.ResourceID)
 					defer p.resourceLock.Unlock(item.Event.ResourceID)
-					
+					defer p.wg.Done()
 					defer func() {
 						recover()
 					}()
 					p.client.SendDeliveryItem(item)
+
 				}()
 			}
-
 		}()
 	}
+}
+
+func (p *Pool) Shutdown(ctx context.Context) error {
+	done := make(chan struct{})
+
+	// wait for the queue draining.
+	go func() {
+		p.wg.Wait()
+		defer close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
 }
 
 func New() *WorkerClient {

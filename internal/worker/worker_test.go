@@ -78,7 +78,6 @@ func TestWorkerPool(t *testing.T) {
 	// for test. 3 events with a single endpoint.
 	var wg sync.WaitGroup
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		defer wg.Done()
 	}
 
 	server := newServer(handler)
@@ -93,7 +92,7 @@ func TestWorkerPool(t *testing.T) {
 	reg.Seed(endpoints)
 
 	// Next Intake
-	service := intake.New(&reg)
+	service := intake.New(&reg, &wg)
 	// Add test events to the queue.
 	for index := 0; index < 5; index++ {
 
@@ -104,13 +103,12 @@ func TestWorkerPool(t *testing.T) {
 				Payload:    []byte(fmt.Sprintf("index : %d", index)),
 			}
 
-			wg.Add(1)
 			service.Submit(sampleEvent)
 		}
 	}
 
 	client := New()
-	pool := NewPool(service.Queue(), 3, *client)
+	pool := NewPool(service.Queue(), 3, *client, &wg)
 	pool.Start()
 
 	wg.Wait()
@@ -140,8 +138,6 @@ func TestResourceLockOnWorkerPool(t *testing.T) {
 		mu.Lock()
 		inFlight = false
 		mu.Unlock()
-
-		defer wg.Done()
 	}
 
 	server := newServer(handler)
@@ -156,7 +152,7 @@ func TestResourceLockOnWorkerPool(t *testing.T) {
 	reg.Seed(endpoints)
 
 	// Next Intake
-	service := intake.New(&reg)
+	service := intake.New(&reg, &wg)
 	// Add test events to the queue.
 	resId := uuid.New()
 	for index := 0; index < 5; index++ {
@@ -168,13 +164,12 @@ func TestResourceLockOnWorkerPool(t *testing.T) {
 				Payload:    []byte(fmt.Sprintf("index : %d", index)),
 			}
 
-			wg.Add(1)
 			service.Submit(sampleEvent)
 		}
 	}
 
 	client := New()
-	pool := NewPool(service.Queue(), 3, *client)
+	pool := NewPool(service.Queue(), 3, *client, &wg)
 	pool.Start()
 	wg.Wait()
 
@@ -204,8 +199,6 @@ func TestDifferentResourcesDeliverConcurrently(t *testing.T) {
 		mu.Lock()
 		current--
 		mu.Unlock()
-
-		defer wg.Done()
 	}
 
 	server := newServer(handler)
@@ -217,7 +210,7 @@ func TestDifferentResourcesDeliverConcurrently(t *testing.T) {
 	reg := registry.Registry{}
 	reg.Seed(endpoints)
 
-	service := intake.New(&reg)
+	service := intake.New(&reg, &wg)
 
 	// Interleaved submission (one event per resource per round), not all of one
 	// resource's events followed by all of another's — otherwise the queue's
@@ -232,13 +225,12 @@ func TestDifferentResourcesDeliverConcurrently(t *testing.T) {
 				Payload:    []byte(fmt.Sprintf("round : %d", round)),
 			}
 
-			wg.Add(1)
 			service.Submit(sampleEvent)
 		}
 	}
 
 	client := New()
-	pool := NewPool(service.Queue(), 3, *client)
+	pool := NewPool(service.Queue(), 3, *client, &wg)
 	pool.Start()
 	wg.Wait()
 

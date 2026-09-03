@@ -1,7 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/RakshithYadhav/webhook-go/internal/event"
@@ -25,24 +31,40 @@ func main() {
 		Payload:    json.RawMessage{},
 	}
 
+	wg := sync.WaitGroup{}
+
 	register := registry.Registry{}
 
 	register.Seed(testData)
 
-	intakeService := intake.New(&register)
+	intakeService := intake.New(&register, &wg)
 
-	intakeService.Submit(testEvent)
+	err := intakeService.Submit(testEvent)
+	if err != nil {
+		fmt.Printf("Shutdown")
+	}
 
 	client := worker.New()
-	pool := worker.NewPool(intakeService.Queue(), 3, *client)
+	pool := worker.NewPool(intakeService.Queue(), 3, *client, &wg)
 	pool.Start()
 
-	// Temporary stand-in until issue #4 (graceful shutdown) gives main() a real
-	// reason to keep running. select{} looked safer but actually deadlocks here:
-	// once this one-shot batch is delivered, every goroutine (main included) is
-	// permanently parked with nothing left to ever wake any of them, and Go's
-	// runtime correctly kills the process for it. Sleeping is fine here because
-	// there's no ongoing concurrent work to synchronize with — just letting one
-	// known, bounded, already-in-flight batch finish before exiting.
-	time.Sleep(3 * time.Second)
+	// user story 4 shutdown mechanism.
+	ctx, stop := signal.NotifyContext(context.Background(),
+		os.Interrupt, syscall.SIGTERM)
+
+	// Ctx done returns a open channel which is blocked if no one listens.
+	// when internally the shutdown signal is got ctx.Done channel 
+	// will be unblocked there by triggering the shutdown mechanism.
+	<-ctx.Done()
+
+	shCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	intakeService.Shutdown()
+	poolErr := pool.Shutdown(shCtx)
+	if poolErr != nil {
+		fmt.Printf("Shutdown")
+	}
+	defer stop()
+
 }

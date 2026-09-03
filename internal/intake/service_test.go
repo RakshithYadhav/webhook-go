@@ -2,11 +2,11 @@ package intake
 
 import (
 	"encoding/json"
-	"testing"
-
 	"github.com/RakshithYadhav/webhook-go/internal/event"
 	"github.com/RakshithYadhav/webhook-go/internal/registry"
 	"github.com/google/uuid"
+	"sync"
+	"testing"
 )
 
 func TestSubmitFanOut(t *testing.T) {
@@ -26,9 +26,10 @@ func TestSubmitFanOut(t *testing.T) {
 
 	// call
 	register := registry.Registry{}
+	wg := sync.WaitGroup{}
 	register.Seed(testData)
-	intakeService := New(&register)
-	
+	intakeService := New(&register, &wg)
+
 	err := intakeService.Submit(testEvent)
 	// assert
 	if err != nil {
@@ -58,9 +59,10 @@ func TestSubmitFanOutWithZeroEndpoints(t *testing.T) {
 
 	// call
 	register := registry.Registry{}
+	wg := sync.WaitGroup{}
 	register.Seed(testData)
-	intakeService := New(&register)
-	
+	intakeService := New(&register, &wg)
+
 	err := intakeService.Submit(testEvent)
 
 	// assert

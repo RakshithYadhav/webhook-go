@@ -107,8 +107,21 @@ where the test handler's sleep exactly matched the HTTP client's timeout, causin
 false-positive overlap). Full record: `docs/adr/0003-per-resource-delivery-ordering.md`.
 `docs/RESUME.md` harvested for #2 and #3 (both were done but hadn't been recorded).
 
-**Next: issue #4 (graceful shutdown, in-flight drain)** — start the same way: §1-2 pass,
-then the design round, write `docs/adr/0004-...md`, then implementation.
+**Issue #4 implementation done (2026-09-03), tests deliberately skipped.** Design round
+covered in `docs/adr/0004-graceful-shutdown.md` — two independent shutdown mechanisms
+(`IntakeService.Shutdown()` instant, `Pool.Shutdown(ctx)` races a shared
+`*sync.WaitGroup` against the caller's deadline), orchestrated by `main.go` (intake
+shutdown first, then pool, after `<-ctx.Done()` unblocks on SIGINT/SIGTERM). Rejected
+two alternatives along the way: a shutdown flag checked per-item in the worker loop
+(would reject already-queued work, contradicting the drain requirement), and narrowing
+"in flight" to only the currently-executing item (contradicts the issue's own stated
+purpose — "never silently drops an event that was already accepted"). Not harvested to
+`docs/RESUME.md` yet — holding off until the shutdown behavior actually has test
+coverage, unlike #2/#3 which were harvested only after verification.
+
+**Next: write tests for issue #4's shutdown behavior** — submission rejection
+post-shutdown, and `Pool.Shutdown`'s drain-vs-deadline race in both outcomes (drains in
+time / times out) — then harvest #4 to `docs/RESUME.md` once covered.
 
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep
