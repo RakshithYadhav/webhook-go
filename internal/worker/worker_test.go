@@ -183,6 +183,70 @@ func TestResourceLockOnWorkerPool(t *testing.T) {
 	}
 }
 
+func TestDifferentResourcesDeliverConcurrently(t *testing.T) {
+	// Different resource IDs must not be serialized against each other by the
+	// keyed lock — only same-resource items should ever block one another.
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	current := 0
+	maxConcurrent := 0
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		current++
+		if current > maxConcurrent {
+			maxConcurrent = current
+		}
+		mu.Unlock()
+
+		time.Sleep(time.Millisecond * 200)
+
+		mu.Lock()
+		current--
+		mu.Unlock()
+
+		defer wg.Done()
+	}
+
+	server := newServer(handler)
+
+	endpoints := map[string][]string{
+		"insert": {server.URL},
+	}
+
+	reg := registry.Registry{}
+	reg.Seed(endpoints)
+
+	service := intake.New(&reg)
+
+	// Interleaved submission (one event per resource per round), not all of one
+	// resource's events followed by all of another's — otherwise the queue's
+	// FIFO order would hand workers the same resource's items first and this
+	// test could pass by accident of ordering rather than by proving anything.
+	resourceIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	for round := 0; round < 5; round++ {
+		for _, resID := range resourceIDs {
+			sampleEvent := event.Event{
+				ResourceID: resID,
+				EventType:  "insert",
+				Payload:    []byte(fmt.Sprintf("round : %d", round)),
+			}
+
+			wg.Add(1)
+			service.Submit(sampleEvent)
+		}
+	}
+
+	client := New()
+	pool := NewPool(service.Queue(), 3, *client)
+	pool.Start()
+	wg.Wait()
+
+	if maxConcurrent <= 1 {
+		t.Fatalf("Expected deliveries for different resources to overlap, but max concurrent was %d", maxConcurrent)
+	}
+}
+
 func newServer(handler func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(handler))
 }
