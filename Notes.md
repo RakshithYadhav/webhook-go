@@ -137,8 +137,31 @@ shuffled to three different positions before landing correctly — must go after
 `err != nil` check (so `res` is guaranteed non-nil) but not deferred so late that a
 non-2xx return skips it.
 
-**Next: issue #6 (containerize and deploy to Kubernetes)** — the last of the six scoped
-issues. Start the same way: §1-2 pass, then the design round.
+**Issue #6, Docker half done (2026-09-04); Kubernetes explicitly on hold** — deferred
+until Kubernetes is being revised as its own topic, per Rakshith's call; will resume
+issue #6 then. `Dockerfile` written at repo root, modeled on `mrp-go`'s multi-stage
+distroless approach (`golang:1.26.4` build stage → `gcr.io/distroless/static:nonroot`
+final stage), adapted for the one real structural difference: webhook-go has no inbound
+listener (outbound-only HTTP client), so no `EXPOSE` line the way mrp-go needed one.
+Image builds clean at ~19.8MB.
+
+Running it in a real container caught a genuine bug in #4's shutdown code that no Go
+test had caught (since none were written — see #4's note above): `main.go` built the
+shutdown deadline context (`shCtx`) from `ctx` (the `signal.NotifyContext` context),
+but by that point `ctx` was already cancelled — it's literally what unblocked
+`<-ctx.Done()` one line earlier. A child context derived from an already-cancelled
+parent is immediately cancelled too, so the "10 second grace period" was actually zero,
+every time — `Pool.Shutdown`'s `select` was racing an always-already-closed
+`ctx.Done()` against `wg.Wait()`, reporting success or failure essentially at random.
+Fixed by deriving `shCtx` from `context.Background()` instead. Verified with
+`docker run` + `docker stop` (sends SIGTERM, same signal Kubernetes uses on pod
+termination): before the fix, shutdown incorrectly logged an error even though both
+(intentionally-failing, placeholder-URL) deliveries had already finished; after the fix,
+no error — first real verification #4's shutdown logic has had.
+
+**Next: pick issue #6 back up for the Kubernetes half when ready** (manifests, local
+cluster via kind/minikube, verify graceful shutdown under a real pod termination — not
+just `docker stop`).
 
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep

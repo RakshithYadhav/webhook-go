@@ -57,7 +57,7 @@ func main() {
 	// will be unblocked there by triggering the shutdown mechanism.
 	<-ctx.Done()
 
-	shCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	shCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	intakeService.Shutdown()
