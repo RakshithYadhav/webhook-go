@@ -3,8 +3,10 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/RakshithYadhav/webhook-go/internal/deliveryItem"
 	"github.com/RakshithYadhav/webhook-go/internal/resourceLock"
+	"log"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -56,7 +58,11 @@ func (p *Pool) Start() {
 					defer func() {
 						recover()
 					}()
-					p.client.SendDeliveryItem(item)
+					err := p.client.SendDeliveryItem(item)
+					if err != nil {
+						log.Printf("delivery failed: resourceID=%s eventType=%s endpoint=%s error=%v",
+							item.Event.ResourceID, item.Event.EventType, item.Endpoint, err)
+					}
 
 				}()
 			}
@@ -91,11 +97,18 @@ func New() *WorkerClient {
 	}
 }
 
-func (w *WorkerClient) SendDeliveryItem(item deliveryitem.DeliveryItem) {
+func (w *WorkerClient) SendDeliveryItem(item deliveryitem.DeliveryItem) error {
 	res, err := w.client.Post(item.Endpoint, "application/json", bytes.NewReader(item.Event.Payload))
+
 	if err != nil {
-		return
+		return err
 	}
 
 	defer res.Body.Close()
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return fmt.Errorf("Delivery Failed : status %d", res.StatusCode)
+	}
+
+	return nil
 }

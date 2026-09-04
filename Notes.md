@@ -123,6 +123,23 @@ coverage, unlike #2/#3 which were harvested only after verification.
 post-shutdown, and `Pool.Shutdown`'s drain-vs-deadline race in both outcomes (drains in
 time / times out) — then harvest #4 to `docs/RESUME.md` once covered.
 
+**Issue #5 implementation done (2026-09-04), tests deliberately skipped.** Small by
+design (issue itself: "deliberately thin"), no ADR written — skipped the design-round
+ceremony for a unit this size, matching the newly confirmed rule that TDD/formal design
+rigor is reserved for "important" implementations, not everything. `SendDeliveryItem`
+now returns an `error` on both connection failure and non-2xx status (previously it
+silently swallowed both); `Pool.Start`'s inner function logs failures with resourceID,
+eventType, and endpoint via `log.Printf`. Caught two real bugs along the way worth
+remembering: (1) an early draft used `log.Fatal`, which calls `os.Exit` and kills the
+whole process — bypasses `defer`/`recover` entirely, unlike a panic, so it would have
+silently defeated #2's per-item panic isolation; (2) `defer res.Body.Close()` got
+shuffled to three different positions before landing correctly — must go after the
+`err != nil` check (so `res` is guaranteed non-nil) but not deferred so late that a
+non-2xx return skips it.
+
+**Next: issue #6 (containerize and deploy to Kubernetes)** — the last of the six scoped
+issues. Start the same way: §1-2 pass, then the design round.
+
 ## Article
 - https://dev.to/vikthurrdev/designing-a-webhook-service-a-practical-guide-to-event-driven-architecture-3lep
 
